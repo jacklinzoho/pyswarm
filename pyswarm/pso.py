@@ -26,7 +26,7 @@ def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep)
     vlow = -vhigh
     v = vlow + np.random.rand(D)*(vhigh - vlow)  # particle initial velocity
 
-    #todo: add termination condition
+    #todo: add termination condition 
     while :
         print(x)
         print(fx)
