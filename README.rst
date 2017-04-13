@@ -1,14 +1,17 @@
 =========================================================
-Particle swarm optimization (PSO) with constraint support
+Asynchronous Particle swarm optimization (PSO) with constraint support
 =========================================================
 
-The ``pyswarm`` package is a gradient-free, evolutionary optimization package 
-for python that supports constraints.
+This is a fork of Pyswarm 0.7 by tisimst.  
 
-What's New
-==========
+This fork adds parallel asynchronous particle support, as described here:
 
-This release features multiprocessing support.
+https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1769316/
+
+Current Status
+==============
+
+Not working yet.
 
 Requirements
 ============
@@ -18,24 +21,10 @@ Requirements
 Installation and download
 =========================
 
-See the `package homepage`_ for helpful hints relating to downloading
-and installing pyswarm.
+This is intended as a drop-in replacement for pyswarm.  The only files changed is this readme, and pso.py.
 
+To have it mimic the behavior of pyswarm 0.7 exactly, pass an extra argument async=False when calling pso.
 
-Source Code
-===========
-
-The latest, bleeding-edge, but working, `code
-<https://github.com/tisimst/pyDOE/tree/master/pyswarm>`_
-and `documentation source
-<https://github.com/tisimst/pyswarm/tree/master/doc/>`_ are
-available `on GitHub <https://github.com/tisimst/pyswarm/>`_.
-
-Contact
-=======
-
-Any feedback, questions, bug reports, or success stores should
-be sent to the `author`_. I'd love to hear from you!
 
 License
 =======
@@ -44,12 +33,3 @@ This package is provided under two licenses:
 
 1. The *BSD License*
 2. Any other that the author approves (just ask!)
-
-References
-==========
-
-- `Particle swarm optimization`_ on Wikipedia
-
-.. _author: mailto:tisimst@gmail.com
-.. _Particle swarm optimization: http://en.wikipedia.org/wiki/Particle_swarm_optimization
-.. _package homepage: http://pythonhosted.org/pyswarm

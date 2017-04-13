@@ -1,26 +1,84 @@
 from functools import partial
 import numpy as np
-from multiprocessing import Process, Lock
+#using this instead on windows.
+from multiprocessing.dummy import Process, Lock
+from time import sleep
+
+def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep):
+    #windows weirdness.
+    #asynchronous particle.  this runs until the main thread tells it to stop.
+    #start by finding a valid x within confines
+    #and initializing all the vars
+    D = len(lb)
+    x = np.random.rand(D)
+    x = lb + x*(ub - lb)
+
+    while not is_feasible(x):
+        x = np.random.rand(D)  # particle positions
+        x = lb + x*(ub - lb)
+
+    fx = obj(x)
+    p = x  # best particle positions
+    fp = fx  # current particle function values
+    #append it to the global list
+    g.add(x, fx)
+    vhigh = np.abs(ub - lb)
+    vlow = -vhigh
+    v = vlow + np.random.rand(D)*(vhigh - vlow)  # particle initial velocity
+
+    #todo: poll the host process to finish
+    while True:
+        print(x)
+        print(fx)
+        sleep(0.1) #this is for testing purposes.  
+        rp = np.random.uniform(size=D)
+        rg = np.random.uniform(size=D)
+
+        # Update the particles velocities
+        v = omega*v + phip*rp*(p - x) + phig*rg*(g.g - x)
+        # Update the particles' positions
+        x = x + v
+        # Correct for bound violations
+        maskl = x < lb
+        masku = x > ub
+        x = x*(~np.logical_or(maskl, masku)) + lb*maskl + ub*masku
+
+        # Store particle's best position (if constraints are satisfied)
+        if is_feasible(x):
+            fx = obj(x)
+            if fx < fp:
+                p = x
+                fp = fx
+            g.add(x, fx) # we add all results to the global list, not just particle best.
+                               # makes it easier to do post-processing
 
 class async_g():
     #store:
     #a counter for how many evals have been completed; a list of positions; a list of results; best; position of best.
     #thread safe.
     #maybe I should add a way to pre-load a list?
-    def __init__(self, initval=0):
+    def __init__(self):
         self.pl = []
         self.fpl = []
-        self.g = None #position of global best
+        self.g = [] #position of global best
         self.fg = np.inf #cost of global best
         self.lock = Lock()
         
-    def add(p, fp):
+    def add(self, p, fp):
         with self.lock:
             self.pl.append(p)
             self.fpl.append(fp)
             if fp < self.fg:
-                self.g = p.copy()
+                self.g = p
                 self.fg = fp
+
+
+
+def cleanup(processes_list):
+    print("running pre-exit cleanup...")
+    for p in processes_list: # list of your processes
+        p.kill() # supported from python 2.6
+    print("done.")
 
 def _obj_wrapper(func, args, kwargs, x):
     return func(x, *args, **kwargs)
@@ -37,53 +95,6 @@ def _cons_ieqcons_wrapper(ieqcons, args, kwargs, x):
 def _cons_f_ieqcons_wrapper(f_ieqcons, args, kwargs, x):
     return np.array(f_ieqcons(x, *args, **kwargs))
     
-def async_particle(obj, lb, ub, is_feasible, omega, phip, phig, g, minstep):
-    #start by finding a valid x within confines
-    #and initializing all the vars
-    D = len(lb)
-    x = np.random.rand(D)
-    x = lb + x*(ub - lb)
-
-    while not is_feasible(x):
-        x = np.random.rand(D)  # particle positions
-        x = lb + x*(ub - lb)
-
-    fx = obj(x)
-    p = x.copy()  # best particle positions
-    fp = fx  # current particle function values
-    #append it to the global list
-    g.add(x, fx)
-    vhigh = np.abs(ub - lb)
-    vlow = -vhigh
-    v = vlow + np.random.rand(D)*(vhigh - vlow)  # particle initial velocity
-
-    #todo: poll the host process to finish
-    while not time_to_finish:
-        rp = np.random.uniform(size=D)
-        rg = np.random.uniform(size=D)
-
-        # Update the particles velocities
-        v = omega*v + phip*rp*(p - x) + phig*rg*(pso_g - x)
-        # Update the particles' positions
-        x = x + v
-        # Correct for bound violations
-        maskl = x < lb
-        masku = x > ub
-        x = x*(~np.logical_or(maskl, masku)) + lb*maskl + ub*masku
-
-        # Store particle's best position (if constraints are satisfied)
-        if is_feasible(x):
-            fx = obj(x)
-            if fx < fp:
-                p = x.copy()
-                fp = fx
-            g.add(x, fx) # we add all results to the global list, not just particle best.
-                               # makes it easier to do post-processing
-    # stopping criteria
-    # set this in the main thread?
-    # would be cool to terminate particles stopped in local minima?
-    
-
 def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={}, 
         swarmsize=100, omega=0.5, phip=0.5, phig=0.5, maxiter=100, 
         minstep=1e-8, minfunc=1e-8, debug=False, processes=1,
@@ -186,27 +197,34 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
     is_feasible = partial(_is_feasible_wrapper, cons)
 
     # Initialize the multiprocessing module if necessary
+
+
     if processes > 1:
         import multiprocessing
         mp_pool = multiprocessing.Pool(processes)
-
+    
     #----- async code starts here ------        
-        
+    # async assumes multiple processes.  it will work even with single, but we'll still use the same implementation.
+    
     if async:
-        from time import sleep
         # best swarm position
 
         g = async_g()
-        last_count = len(g.fg)
-        last_fg = np.inf
-        last_g = []
+        processes_list = []
+        for i in range(processes):
+            pp = Process(target=async_particle, args=(i, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep))
+            processes_list.append(pp)
+            pp.start()
+        last_count = len(g.fpl)
+        last_fg = g.fg
+        last_g = g.g
         while True:
             #main loop
-            sleep(5)
-            #watch the list for the following conditions:
-            new_count = len(g.fg)
+            sleep(10)
+            #watch the list for the following conditions every 10 seconds:
+            new_count = len(g.fpl)
             new_fg = g.fg
-            new_g = g.g.copy()
+            new_g = g.g
             if new_fg < last_fg:
                 if debug:
                     print ('New best for swarm at iteration {:}: {:} {:}'\
@@ -215,18 +233,31 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
                 if new_fg - last_fg < minfunc:
                     print('Stopping search: Swarm best objective change less than {:}'\
                         .format(minfunc))
+                    cleanup(processes_list)
                     return g.g, f.fg
+                
+                # the async version probably needs to be tighter with the minstep than pyswarm
+                # since g is updated more often and the probability of getting an update within minstep is higher
+                stepsize = np.sqrt(np.sum((new_g - last_g)**2))
+                if stepsize <= minstep:
+                    print('Stopping search: Swarm best position change less than {:}'\
+                        .format(minstep))
+                    if particle_output:
+                        cleanup(processes_list)
+                        return g.g, f.fg
+                        #return p_min, fp[i_min], p, fp
+                    else:
+                        cleanup(processes_list)
+                        return g.g, f.fg             
 
                 if int(len(g.pl)/swarmsize+1) >=maxiter:
                     print('Stopping search: maximum iterations reached --> {:}'.format(maxiter))
+                    cleanup(processes_list)
                     return g.g, g.fg
-            last_fg = g.fg
-            last_g = g.g.copy()
+                last_fg = g.fg
+                last_g = g.g
         
-        def cleanup(all_processes):
-            for p in all_processes: # list of your processes
-                p.kill() # supported from python 2.6
-            print 'cleaned up!'
+
         
         # poll the global list
         # compare current with last
@@ -350,3 +381,4 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
         return g, fg, p, fp
     else:
         return g, fg
+
