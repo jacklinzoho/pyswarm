@@ -257,8 +257,6 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
                 last_fg = g.fg
                 last_g = list(g.g)
         
-
-        
         # poll the global list
         # compare current with last
         # we don't really have iterations as such, so 
@@ -266,8 +264,6 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
         # by this definition probably it needs more 'iterations' than pyswarm
         # but walltime is what's really important, and it wins by that metric.
         # particle_output is not supported and ignored.
-        
-
         
     #---- everything below this line should be unchanged from pyswarm 0.7 ----
         
