@@ -52,7 +52,6 @@ def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep)
                 
             g.add(x, fx, pid) # we add all results to the global list, not just particle best.
                                # makes it easier to do post-processing
-        
 
 class async_g():
     #store:
@@ -227,7 +226,7 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
             new_count = len(g.fpl)
             if g.fg < last_fg:
                 if debug:
-                    print ('New best for swarm at iteration {:}: {:} {:}'\
+                    print('New best for swarm at iteration {:}: {:} {:}'\
                             .format(int(len(g.pl)/swarmsize + 1), g.g, g.fg))
 
                 if g.fg - last_fg < minfunc:
