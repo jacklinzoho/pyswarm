@@ -1,5 +1,26 @@
 from functools import partial
 import numpy as np
+from multiprocessing import Process, Lock
+
+class async_g():
+    #store:
+    #a counter for how many evals have been completed; a list of positions; a list of results; best; position of best.
+    #thread safe.
+    #maybe I should add a way to pre-load a list?
+    def __init__(self, initval=0):
+        self.pl = []
+        self.fpl = []
+        self.g = None #position of global best
+        self.fg = np.inf #cost of global best
+        self.lock = Lock()
+        
+    def add(p, fp):
+        with self.lock:
+            self.pl.append(p)
+            self.fpl.append(fp)
+            if fp < self.fg:
+                self.g = p.copy()
+                self.fg = fp
 
 def _obj_wrapper(func, args, kwargs, x):
     return func(x, *args, **kwargs)
@@ -16,12 +37,60 @@ def _cons_ieqcons_wrapper(ieqcons, args, kwargs, x):
 def _cons_f_ieqcons_wrapper(f_ieqcons, args, kwargs, x):
     return np.array(f_ieqcons(x, *args, **kwargs))
     
+def async_particle(obj, lb, ub, is_feasible, omega, phip, phig, g, minstep):
+    #start by finding a valid x within confines
+    #and initializing all the vars
+    D = len(lb)
+    x = np.random.rand(D)
+    x = lb + x*(ub - lb)
+
+    while not is_feasible(x):
+        x = np.random.rand(D)  # particle positions
+        x = lb + x*(ub - lb)
+
+    fx = obj(x)
+    p = x.copy()  # best particle positions
+    fp = fx  # current particle function values
+    #append it to the global list
+    g.add(x, fx)
+    vhigh = np.abs(ub - lb)
+    vlow = -vhigh
+    v = vlow + np.random.rand(D)*(vhigh - vlow)  # particle initial velocity
+
+    #todo: poll the host process to finish
+    while not time_to_finish:
+        rp = np.random.uniform(size=D)
+        rg = np.random.uniform(size=D)
+
+        # Update the particles velocities
+        v = omega*v + phip*rp*(p - x) + phig*rg*(pso_g - x)
+        # Update the particles' positions
+        x = x + v
+        # Correct for bound violations
+        maskl = x < lb
+        masku = x > ub
+        x = x*(~np.logical_or(maskl, masku)) + lb*maskl + ub*masku
+
+        # Store particle's best position (if constraints are satisfied)
+        if is_feasible(x):
+            fx = obj(x)
+            if fx < fp:
+                p = x.copy()
+                fp = fx
+            g.add(x, fx) # we add all results to the global list, not just particle best.
+                               # makes it easier to do post-processing
+    # stopping criteria
+    # set this in the main thread?
+    # would be cool to terminate particles stopped in local minima?
+    
+
 def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={}, 
         swarmsize=100, omega=0.5, phip=0.5, phig=0.5, maxiter=100, 
         minstep=1e-8, minfunc=1e-8, debug=False, processes=1,
-        particle_output=False):
+        particle_output=False, async=True):
     """
-    Perform a particle swarm optimization (PSO)
+    Perform an asynchronous particle swarm optimization (PSO)
+    Set async=False to mimic behavior of pyswarm 0.7 (synchronous)
    
     Parameters
     ==========
@@ -120,6 +189,56 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
     if processes > 1:
         import multiprocessing
         mp_pool = multiprocessing.Pool(processes)
+
+    #----- async code starts here ------        
+        
+    if async:
+        from time import sleep
+        # best swarm position
+
+        g = async_g()
+        last_count = len(g.fg)
+        last_fg = np.inf
+        last_g = []
+        while True:
+            #main loop
+            sleep(5)
+            #watch the list for the following conditions:
+            new_count = len(g.fg)
+            new_fg = g.fg
+            new_g = g.g.copy()
+            if new_fg < last_fg:
+                if debug:
+                    print ('New best for swarm at iteration {:}: {:} {:}'\
+                            .format(int(len(g.pl)/swarmsize + 1), new_g, new_fg))
+
+                if new_fg - last_fg < minfunc:
+                    print('Stopping search: Swarm best objective change less than {:}'\
+                        .format(minfunc))
+                    return g.g, f.fg
+
+                if int(len(g.pl)/swarmsize+1) >=maxiter:
+                    print('Stopping search: maximum iterations reached --> {:}'.format(maxiter))
+                    return g.g, g.fg
+            last_fg = g.fg
+            last_g = g.g.copy()
+        
+        def cleanup(all_processes):
+            for p in all_processes: # list of your processes
+                p.kill() # supported from python 2.6
+            print 'cleaned up!'
+        
+        # poll the global list
+        # compare current with last
+        # we don't really have iterations as such, so 
+        # here we adapt the convention that iteration = int(len(g.pl)/swarmsize+1)
+        # by this definition probably it needs more 'iterations' than pyswarm
+        # but walltime is what's really important, and it wins by that metric.
+        # particle_output is not supported and ignored.
+        
+
+        
+    #---- everything below this line should be unchanged from pyswarm 0.7 ----
         
     # Initialize the particle swarm ############################################
     S = swarmsize
@@ -136,7 +255,6 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
     # Initialize the particle's position
     x = lb + x*(ub - lb)
 
-    # Calculate objective and constraints for each particle
     if processes > 1:
         fx = np.array(mp_pool.map(obj, x))
         fs = np.array(mp_pool.map(is_feasible, x))
