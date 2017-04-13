@@ -8,6 +8,8 @@ This fork adds parallel asynchronous particle support, as described here:
 
 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1769316/
 
+The key difference is that particles do not wait until the end of an iteration to start the next run.  This prevents CPUs from idling in heterogenous environments, or if some simulations take longer than others.
+
 Current Status
 ==============
 
