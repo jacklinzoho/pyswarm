@@ -7,7 +7,7 @@ from time import sleep
 def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep):
     #windows weirdness.
     #asynchronous particle.  this runs until the main thread tells it to stop.
-    #start by finding a valid x within confines
+    #start by finding a valid x within confines 
     #and initializing all the vars
     D = len(lb)
     x = np.random.rand(D)
