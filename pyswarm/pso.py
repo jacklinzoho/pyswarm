@@ -18,16 +18,16 @@ def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep)
         x = lb + x*(ub - lb)
 
     fx = obj(x)
-    p = x  # best particle positions
+    p = list(x)  # best particle positions
     fp = fx  # current particle function values
     #append it to the global list
-    g.add(x, fx)
+    g.add(x, fx, pid)
     vhigh = np.abs(ub - lb)
     vlow = -vhigh
     v = vlow + np.random.rand(D)*(vhigh - vlow)  # particle initial velocity
 
-    #todo: poll the host process to finish
-    while True:
+    #todo: add termination condition
+    while :
         print(x)
         print(fx)
         sleep(0.1) #this is for testing purposes.  
@@ -47,30 +47,32 @@ def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep)
         if is_feasible(x):
             fx = obj(x)
             if fx < fp:
-                p = x
+                p = list(x)
                 fp = fx
-            g.add(x, fx) # we add all results to the global list, not just particle best.
+                
+            g.add(x, fx, pid) # we add all results to the global list, not just particle best.
                                # makes it easier to do post-processing
+        
 
 class async_g():
     #store:
     #a counter for how many evals have been completed; a list of positions; a list of results; best; position of best.
     #thread safe.
     #maybe I should add a way to pre-load a list?
-    def __init__(self):
-        self.pl = []
-        self.fpl = []
-        self.g = [] #position of global best
+    def __init__(self,D):
+        self.xlog = {}
+        self.fxlog = {}
+        self.g = np.random.rand(D) #position of global best
         self.fg = np.inf #cost of global best
         self.lock = Lock()
         
-    def add(self, p, fp):
+    def add(self, x, fx, pid):
         with self.lock:
-            self.pl.append(p)
-            self.fpl.append(fp)
-            if fp < self.fg:
-                self.g = p
-                self.fg = fp
+            self.xlog[pid].append(list(x))
+            self.fxlog[pid].append(fx)
+            if fx < self.fg:
+                self.g = list(x)
+                self.fg = fx
 
 
 
@@ -209,28 +211,26 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
     if async:
         # best swarm position
 
-        g = async_g()
+        g = async_g(len(lb))
         processes_list = []
         for i in range(processes):
             pp = Process(target=async_particle, args=(i, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep))
             processes_list.append(pp)
             pp.start()
-        last_count = len(g.fpl)
+        last_count = len(g.fxlog)
         last_fg = g.fg
-        last_g = g.g
+        last_g = list(g.g)
         while True:
             #main loop
             sleep(10)
             #watch the list for the following conditions every 10 seconds:
             new_count = len(g.fpl)
-            new_fg = g.fg
-            new_g = g.g
-            if new_fg < last_fg:
+            if g.fg < last_fg:
                 if debug:
                     print ('New best for swarm at iteration {:}: {:} {:}'\
-                            .format(int(len(g.pl)/swarmsize + 1), new_g, new_fg))
+                            .format(int(len(g.pl)/swarmsize + 1), g.g, g.fg))
 
-                if new_fg - last_fg < minfunc:
+                if g.fg - last_fg < minfunc:
                     print('Stopping search: Swarm best objective change less than {:}'\
                         .format(minfunc))
                     cleanup(processes_list)
@@ -250,12 +250,13 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
                         cleanup(processes_list)
                         return g.g, f.fg             
 
-                if int(len(g.pl)/swarmsize+1) >=maxiter:
+                #number of evals performed so far / swarm size + 1 ~= number of iterations in synchronized pso
+                if int(sum(len(ff[i]) for i in ff)/swarmsize+1) >=maxiter:
                     print('Stopping search: maximum iterations reached --> {:}'.format(maxiter))
                     cleanup(processes_list)
                     return g.g, g.fg
                 last_fg = g.fg
-                last_g = g.g
+                last_g = list(g.g)
         
 
         
