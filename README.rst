@@ -8,7 +8,9 @@ This fork adds parallel asynchronous particle support, as described here:
 
 https://www.ncbi.nlm.nih.gov/pmc/articles/PMC1769316/
 
-The key difference is that particles do not wait until the end of an iteration to start the next run.  This prevents CPUs from idling in heterogenous environments, or if some simulations take longer than others.
+The key difference is that particles do not wait until the end of an iteration to start the next run or update the global best.  This prevents CPUs from idling when some function evaluations take significantly longer than others.
+
+Intended for inversion of computationally expensive functions using many parallel evaluations.  I (intend to) use it to match free parameters in FEM simulations.
 
 Current Status
 ==============
