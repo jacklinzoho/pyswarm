@@ -30,7 +30,7 @@ def async_particle((id, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep)
     #todo: add termination condition 
     #what do i do if particle stuck in local minima?
     while not g.end:
-        sleep(0.1) #this is for testing purposes.  
+        sleep(0.01) #this is for testing purposes.  
         rp = np.random.uniform(size=D)
         rg = np.random.uniform(size=D)
 
@@ -64,16 +64,17 @@ class async_g():
     #a counter for how many evals have been completed; a list of positions; a list of results; best; position of best.
     #thread safe.
     #maybe I should add a way to pre-load a list?
-    def __init__(self,D):
+    def __init__(self,processes,lb,ub):
         from multiprocessing.dummy import Lock
         self.xlog = {}
         self.fxlog = {}
-        for i in range(D):
+        for i in range(processes):
             self.xlog[str(i)] = []
             self.fxlog[str(i)] = []
         #print self.xlog
         #print self.fxlog
-        self.g = np.random.rand(D) #position of global best
+        self.g = np.random.rand(len(lb))
+        self.g = lb + self.g*(ub - lb) #position of global best - random at start.
         self.fg = np.inf #cost of global best
         self.lock = Lock()
         self.count = 0
@@ -239,7 +240,7 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
     if async:
         # best swarm position
 
-        g = async_g(len(lb))
+        g = async_g(processes,lb,ub)
         last_count = g.count
         last_fg = g.fg
         last_g = list(g.g)
@@ -250,7 +251,7 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
         pool.map(async_particle, args)
         while True:
             #main loop
-            sleep(0.05)
+            sleep(0.01)
             #watch the list for the following conditions every 1 second:
             new_count = g.count
             if g.fg < last_fg:
@@ -262,7 +263,7 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
                     print('Stopping search: Swarm best objective change less than {:}'\
                         .format(minfunc))
                     g.end = True
-                    sleep(1)
+                    sleep(0.5)
                     pool.close()
                     pool.join()
                     if particle_output:
@@ -278,7 +279,7 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
                     print('Stopping search: Swarm best position change less than {:}'\
                         .format(minstep))
                     g.end = True
-                    sleep(1)
+                    sleep(0.5)
                     pool.close()
                     pool.join()
                     if particle_output:
@@ -291,7 +292,7 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
                 if int(new_count/processes+1) >=maxiter:
                     print('Stopping search: maximum iterations reached --> {:}'.format(maxiter))
                     g.end = True
-                    sleep(1)
+                    sleep(0.5)
                     pool.close()
                     pool.join()
                     if particle_output:
@@ -313,8 +314,8 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
     #---- everything below this line should be unchanged from pyswarm 0.7 ----
 
     if processes > 1:
-        fx = np.array(mp_pool.map(obj, x))
-        fs = np.array(mp_pool.map(is_feasible, x))
+        fx = np.array(pool.map(obj, x))
+        fs = np.array(pool.map(is_feasible, x))
     else:
         for i in range(S):
             fx[i] = obj(x[i, :])
@@ -355,8 +356,8 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
 
         # Update objectives and constraints
         if processes > 1:
-            fx = np.array(mp_pool.map(obj, x))
-            fs = np.array(mp_pool.map(is_feasible, x))
+            fx = np.array(pool.map(obj, x))
+            fs = np.array(pool.map(is_feasible, x))
         else:
             for i in range(S):
                 fx[i] = obj(x[i, :])
