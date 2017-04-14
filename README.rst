@@ -15,7 +15,7 @@ Intended for inversion of computationally expensive functions using many paralle
 Current Status
 ==============
 
-Works, but probably buggy and need further testing.  Not ready for use.
+Buggy and need further testing.  Not ready for use.
 
 Requirements
 ============
