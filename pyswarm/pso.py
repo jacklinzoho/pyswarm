@@ -1,14 +1,15 @@
 from functools import partial
 import numpy as np
 #using this instead on windows.
-from multiprocessing.dummy import Process, Lock
+
 from time import sleep
 
-def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep):
+def async_particle((id, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep)):
     #windows weirdness.
     #asynchronous particle.  this runs until the main thread tells it to stop.
     #start by finding a valid x within confines 
     #and initializing all the vars
+    print("start "+str(id))
     D = len(lb)
     x = np.random.rand(D)
     x = lb + x*(ub - lb)
@@ -21,7 +22,7 @@ def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep)
     p = list(x)  # best particle positions
     fp = fx  # current particle function values
     #append it to the global list
-    g.add(x, fx, pid)
+    g.add(x, fx, id)
     vhigh = np.abs(ub - lb)
     vlow = -vhigh
     v = vlow + np.random.rand(D)*(vhigh - vlow)  # particle initial velocity
@@ -29,15 +30,15 @@ def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep)
     #todo: add termination condition 
     #what do i do if particle stuck in local minima?
     while not g.end:
-        sleep(0.01) #this is for testing purposes.  
+        sleep(0.1) #this is for testing purposes.  
         rp = np.random.uniform(size=D)
         rg = np.random.uniform(size=D)
 
         # Update the particles velocities
         v = omega*v + phip*rp*(p - x) + phig*rg*(g.g - x)
         # maintain minimum velocity inside the particle
-        while np.linalg.norm(v)  < minstep:
-          v = v*1.1
+        if np.linalg.norm(v) < minstep:
+            return 0
         
         # Update the particles' positions
         x = x + v
@@ -52,8 +53,11 @@ def async_particle(pid, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep)
             if fx < fp:
                 p = list(x)
                 fp = fx
-            g.add(x, fx, pid) # we add all results to the global list, not just particle best.
+            g.add(x, fx, id) # we add all results to the global list, not just particle best.
                                # makes it easier to do post-processing
+        print(x)
+        print(fx)
+    return 0
 
 class async_g():
     #store:
@@ -61,6 +65,7 @@ class async_g():
     #thread safe.
     #maybe I should add a way to pre-load a list?
     def __init__(self,D):
+        from multiprocessing.dummy import Lock
         self.xlog = {}
         self.fxlog = {}
         for i in range(D):
@@ -74,10 +79,10 @@ class async_g():
         self.count = 0
         self.end = False
         
-    def add(self, x, fx, pid):
+    def add(self, x, fx, id):
         with self.lock:
-            self.xlog[str(pid)].append(x)
-            self.fxlog[str(pid)].append(fx)
+            self.xlog[str(id)].append(list(x))
+            self.fxlog[str(id)].append(fx)
             self.count = self.count +1
             if fx < self.fg:
                 self.g = list(x)
@@ -88,6 +93,7 @@ class async_g():
 def cleanup(processes_list):
     print("running pre-exit cleanup...")
     for p in processes_list: # list of your processes
+        p.join()
         p.terminate()
     print("done.")
 
@@ -209,8 +215,8 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
 
     # Initialize the multiprocessing module if necessary
     if processes > 1:
-        import multiprocessing
-        mp_pool = multiprocessing.Pool(processes)
+        import multiprocessing.dummy
+        pool = multiprocessing.dummy.Pool(processes=processes)
             
     # Initialize the particle swarm ############################################
     S = swarmsize
@@ -234,18 +240,17 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
         # best swarm position
 
         g = async_g(len(lb))
-        processes_list = []
-        for i in range(processes):
-            pp = Process(target=async_particle, args=(i, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep))
-            processes_list.append(pp)
-            print i
-            pp.start()
         last_count = g.count
         last_fg = g.fg
         last_g = list(g.g)
+        
+        args = []
+        for i in range(processes):
+            args.append((i, obj, lb, ub, is_feasible, omega, phip, phig, g, minstep))
+        pool.map(async_particle, args)
         while True:
             #main loop
-            sleep(1)
+            sleep(0.05)
             #watch the list for the following conditions every 1 second:
             new_count = g.count
             if g.fg < last_fg:
@@ -257,6 +262,9 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
                     print('Stopping search: Swarm best objective change less than {:}'\
                         .format(minfunc))
                     g.end = True
+                    sleep(1)
+                    pool.close()
+                    pool.join()
                     if particle_output:
                         return g.g, g.fg
                         #return p_min, fp[i_min], p, fp
@@ -269,7 +277,10 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
                 if stepsize <= minstep:
                     print('Stopping search: Swarm best position change less than {:}'\
                         .format(minstep))
-                    g.end = True   
+                    g.end = True
+                    sleep(1)
+                    pool.close()
+                    pool.join()
                     if particle_output:
                         return g.g, g.fg
                         #return p_min, fp[i_min], p, fp
@@ -280,6 +291,9 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
                 if int(new_count/processes+1) >=maxiter:
                     print('Stopping search: maximum iterations reached --> {:}'.format(maxiter))
                     g.end = True
+                    sleep(1)
+                    pool.close()
+                    pool.join()
                     if particle_output:
                         return g.g, g.fg
                         #return p_min, fp[i_min], p, fp
