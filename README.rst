@@ -15,7 +15,7 @@ Intended for inversion of computationally expensive functions using many paralle
 Current Status
 ==============
 
-Buggy and need further testing.  Not ready for use.
+Works, but need further testing.  Not ready for use.
 
 Requirements
 ============
@@ -25,9 +25,11 @@ Requirements
 Installation and download
 =========================
 
-This is intended as a drop-in replacement for pyswarm.  The only files changed is this readme, and pso.py.
+This is a drop-in replacement for pyswarm.  The only files changed is this readme, pso.py, and setup.py.
 
 To have it mimic the behavior of pyswarm 0.7 exactly, pass an extra argument async=False when calling pso.
+
+There is also a new quiet=True flag that disables all screen output (for hyperparameter tuning).
 
 
 License
