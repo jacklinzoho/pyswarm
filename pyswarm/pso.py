@@ -101,24 +101,21 @@ class async_g():
                 self.g = np.array(x)
                 self.fg = fx
                 if self.debug:
-                  print('New best for swarm at iteration {:}: {:} {:}'\
-                          .format(int(self.count/self.processes + 1), self.g, self.fg))       
+                  print('New best for swarm at iteration {:}: {:} {:}'.format(int(self.count/self.processes + 1), self.g, self.fg))       
 
-                if self.count > 2 and self.last_fg-self.fg<self.minfunc and not quiet:
-                    print('Stopping search: Swarm best objective change less than {:}'\
-                        .format(self.minfunc))
+                if self.count > 2 and self.last_fg-self.fg<self.minfunc:
+                    if not self.quiet:
+                        print('Stopping search: Swarm best objective change less than {:}'.format(self.minfunc))
                     self.end = True
 
-                   
-                elif self.count > 2 and np.linalg.norm(self.g - self.last_g) <= self.minstep and not quiet:
-                    print('Stopping search: Swarm best position change less than {:}'\
-                        .format(self.minstep))
+                elif self.count > 2 and np.linalg.norm(self.g - self.last_g) <= self.minstep:
+                    if not self.quiet:
+                        print('Stopping search: Swarm best position change less than {:}'.format(self.minstep))
                     self.end = True
-
-                
-                elif self.maxcount <= self.count and not quiet:
+            if self.maxcount <= self.count:
+                if not self.quiet:
                     print('Stopping search: maximum iterations reached --> {:}'.format(self.maxiter))
-                    self.end = True
+                self.end = True
 
 
 def _obj_wrapper(func, args, kwargs, x):
@@ -260,7 +257,7 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
     # async requires multiprocessing.
     # also, swarmsize is not used.  instead, swarmsize is equal to processes.  let the os do the scheduling.
     if processes > 1 or async:
-        #using this instead of processes; on windows it seems to work better.
+        #using this as it seems to work better on windows.
         import multiprocessing.dummy
         mp_pool = multiprocessing.dummy.Pool(processes=processes)
 
