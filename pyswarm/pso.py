@@ -56,8 +56,7 @@ def async_particle((id, obj, lb, ub, is_feasible, omega, phip, phig, ag, minstep
 
 
 class async_g():
-    #store:
-    #a counter for how many evals have been completed; a list of positions; a list of results; best; position of best.
+    #stores various global information, including the global best.
     #thread safe.
     #maybe I should add a way to pre-load a list?
     def __init__(self,processes,maxiter,lb,ub,mp_pool,minstep,minfunc,debug,quiet):
@@ -88,11 +87,13 @@ class async_g():
         
     def add(self, x, fx, id):
         with self.lock:
-            #todo: move the global processing here, where it's locked, and where it ticks once per update.
+            #todo: currently the algorithm politely asks the particles to stop after they finish their current sim.
+            #maybe there should be an option to forcibly terminate instead and save a few cycles.
             self.xlog[str(id)].append(np.array(x))
             self.fxlog[str(id)].append(fx)
             self.count = self.count +1
             
+            #todo: add new termination condition like 'x number of iterations without improvement'.
             if self.debug and not (self.count % self.processes):
                 print('Best after iteration {:}: {:} {:}'.format(int(self.count/self.processes +1 ), self.g, self.fg))
             if fx < self.fg:
@@ -100,9 +101,13 @@ class async_g():
                 self.last_fg = self.fg  
                 self.g = np.array(x)
                 self.fg = fx
-                if self.debug:
-                  print('New best for swarm at iteration {:}: {:} {:}'.format(int(self.count/self.processes + 1), self.g, self.fg))       
+                if self.debug and not self.quiet:
+                    if int(self.count/self.processes) > 0:
+                        print('New best for swarm at iteration {:}: {:} {:}'.format(int(self.count/self.processes), self.g, self.fg))
+                    else:
+                        print('New best for swarm at initial iteration: {:} {:}'.format(self.g, self.fg))
 
+                        
                 if self.count > 2 and self.last_fg-self.fg<self.minfunc:
                     if not self.quiet:
                         print('Stopping search: Swarm best objective change less than {:}'.format(self.minfunc))
