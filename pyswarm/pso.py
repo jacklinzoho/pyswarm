@@ -95,7 +95,7 @@ class async_g():
             
             #todo: add new termination condition like 'x number of iterations without improvement'.
             if self.debug and not (self.count % self.processes):
-                print('Best after iteration {:}: {:} {:}'.format(int(self.count/self.processes +1 ), self.g, self.fg))
+                print('Best after iteration {:}: {:} {:}'.format(int(self.count/self.processes ), self.g, self.fg))
             if fx < self.fg:
                 self.last_g = np.array(self.g)
                 self.last_fg = self.fg  
@@ -106,13 +106,10 @@ class async_g():
                         print('New best for swarm at iteration {:}: {:} {:}'.format(int(self.count/self.processes), self.g, self.fg))
                     else:
                         print('New best for swarm at initial iteration: {:} {:}'.format(self.g, self.fg))
-
-                        
                 if self.count > 2 and self.last_fg-self.fg<self.minfunc:
                     if not self.quiet:
                         print('Stopping search: Swarm best objective change less than {:}'.format(self.minfunc))
                     self.end = True
-
                 elif self.count > 2 and np.linalg.norm(self.g - self.last_g) <= self.minstep:
                     if not self.quiet:
                         print('Stopping search: Swarm best position change less than {:}'.format(self.minstep))
