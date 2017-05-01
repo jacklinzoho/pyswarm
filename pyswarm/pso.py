@@ -8,10 +8,13 @@ def async_particle((id, obj, lb, ub, is_feasible, omega, phip, phig, ag, minstep
     D = len(lb)
     x = np.random.rand(D)
     x = lb + x*(ub - lb)
-
-    while not is_feasible(x):
+    
+    feasible_count = 0
+    while not is_feasible(x) and feasible_count < 100:
         x = np.random.rand(D)  # particle positions
         x = lb + x*(ub - lb)
+        #if exceeding this count, just give up for the iteration.
+        feasible_count = feasible_count +1
 
     fx = obj(x)
     p = np.array(x)  # best particle positions
@@ -71,6 +74,7 @@ class async_g():
         self.fg = np.inf #cost of global best
         self.last_g = np.array(self.g)
         self.last_fg = self.fg
+        self.last_iter_fg = np.inf
         self.lock = Lock()
         self.count = 0
         self.processes = processes
@@ -82,7 +86,7 @@ class async_g():
         self.end = False
         self.mp_pool = mp_pool
         self.quiet = quiet
-
+        self.no_improvement_count = 0
     
         
     def add(self, x, fx, id):
@@ -93,20 +97,17 @@ class async_g():
             self.fxlog[str(id)].append(fx)
             self.count = self.count +1
             
-            #todo: add new termination condition like 'x number of iterations without improvement'.
-            if self.debug and not (self.count % self.processes):
-                print('Best after iteration {:}: {:} {:}'.format(int(self.count/self.processes ), self.g, self.fg))
             if fx < self.fg:
                 self.last_g = np.array(self.g)
                 self.last_fg = self.fg  
                 self.g = np.array(x)
                 self.fg = fx
-                if self.debug and not self.quiet:
+                if self.debug:
                     if int(self.count/self.processes) > 0:
                         print('New best for swarm at iteration {:}: {:} {:}'.format(int(self.count/self.processes), self.g, self.fg))
                     else:
-                        print('New best for swarm at initial iteration: {:} {:}'.format(self.g, self.fg))
-                if self.count > 2 and self.last_fg-self.fg<self.minfunc:
+                        print('New best for swarm at initial random positions: {:} {:}'.format(self.g, self.fg))
+                if self.count > 2 and (self.last_fg-self.fg) < self.minfunc:
                     if not self.quiet:
                         print('Stopping search: Swarm best objective change less than {:}'.format(self.minfunc))
                     self.end = True
@@ -114,6 +115,21 @@ class async_g():
                     if not self.quiet:
                         print('Stopping search: Swarm best position change less than {:}'.format(self.minstep))
                     self.end = True
+            #note that debug=True overrides quiet=True.
+            #add new termination condition like 'x number of iterations without improvement'.
+            if not (self.count % self.processes):
+                if self.debug:
+                    print('Best after iteration {:}: {:} {:}'.format(int(self.count/self.processes), self.g, self.fg))
+                if self.last_iter_fg == self.fg:
+                    self.no_improvement_count = self.no_improvement_count +1
+                else: 
+                    self.no_improvement_count = 0
+                    self.last_iter_fg = self.fg
+                if self.no_improvement_count >= 5:
+                    if not self.quiet:
+                        print('stopping search: No improvement after 5 iterations.')
+                    self.end = True
+
             if self.maxcount <= self.count:
                 if not self.quiet:
                     print('Stopping search: maximum iterations reached --> {:}'.format(self.maxiter))
@@ -265,6 +281,9 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
 
     if async:
         # best swarm position
+        #debug overrides quiet
+        if debug:
+          quiet=False
         ag = async_g(processes,maxiter,lb,ub,mp_pool,minstep,minfunc,debug,quiet)
         args = []
         for i in range(processes):
@@ -272,6 +291,8 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
         mp_pool.map(async_particle, args)
         mp_pool.close()
         mp_pool.join()
+        if not is_feasible(ag.g) and not quiet:
+          print("However, the optimization couldn't find a feasible design. Sorry")
         if particle_output:
             #the format is a bit different; xlog and fxlog are histories of all particles.  also they're dictionaries.
             return ag.g, ag.fg, ag.xlog, ag.fxlog
