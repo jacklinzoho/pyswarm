@@ -35,12 +35,12 @@ def async_particle((id, obj, lb, ub, is_feasible, omega, phip, phig, ag, minstep
         # Update the particles velocities
         v = omega*v + phip*rp*(p - x) + phig*rg*(ag.g - x)
         
-        if np.linalg.norm(v) < minstep or np.isnan(fx):
+        if np.linalg.norm(v) < minstep:
             # make the alg start a new particle at random position and velocity
-            # this can be forced with the cost function by passing a nan
             x = np.random.rand(D)
             x = lb + x*(ub - lb)
             v = vlow + np.random.rand(D)*(vhigh - vlow)
+            
         # Update the particles' positions
         x = x + v
         # Correct for bound violations
@@ -48,14 +48,20 @@ def async_particle((id, obj, lb, ub, is_feasible, omega, phip, phig, ag, minstep
         masku = x > ub
         x = x*(~np.logical_or(maskl, masku)) + lb*maskl + ub*masku
 
+        
         # Store particle's best position (if constraints are satisfied)
         if is_feasible(x):
             fx = obj(x)
-            if fx < fp:
-                p = np.array(x)
-                fp = fx
-            ag.add(x, fx, id) # we add all results to the global list, not just particle best.
-                               # makes it easier to do post-processing
+            if np.isnan(fx):
+                # make the alg start a new particle at random position and velocity
+                x = np.random.rand(D)
+                x = lb + x*(ub - lb)
+            else:
+                if fx < fp:
+                    p = np.array(x)
+                    fp = fx
+                ag.add(x, fx, id) # we add all results to the global list, not just particle best.
+                                   # makes it easier to do post-processing
         if ag.end:
             return 0
 
