@@ -34,11 +34,13 @@ def async_particle((id, obj, lb, ub, is_feasible, omega, phip, phig, ag, minstep
 
         # Update the particles velocities
         v = omega*v + phip*rp*(p - x) + phig*rg*(ag.g - x)
-        # maintain minimum velocity inside the particle
-        if np.linalg.norm(v) < minstep:
-            #TODO: make the alg start a new particle if this happens?
-            v = vlow + np.random.rand(D)*(vhigh - vlow)
         
+        if np.linalg.norm(v) < minstep or np.isnan(fx):
+            # make the alg start a new particle at random position and velocity
+            # this can be forced with the cost function by passing a nan
+            x = np.random.rand(D)
+            x = lb + x*(ub - lb)
+            v = vlow + np.random.rand(D)*(vhigh - vlow)
         # Update the particles' positions
         x = x + v
         # Correct for bound violations
@@ -74,7 +76,6 @@ class async_g():
         self.fg = np.inf #cost of global best
         self.last_g = np.array(self.g)
         self.last_fg = self.fg
-        self.last_iter_fg = np.inf
         self.lock = Lock()
         self.count = 0
         self.processes = processes
@@ -97,6 +98,19 @@ class async_g():
             self.fxlog[str(id)].append(fx)
             self.count = self.count +1
             
+            #note that debug=True overrides quiet=True.
+            #todo: add new termination condition like 'x number of iterations without improvement'.
+            if not (self.count % self.processes):
+                if self.debug:
+                  print('Best after iteration {:}: {:} {:}'.format(int(self.count/self.processes ), self.g, self.fg))
+                if self.last_fg == self.fg:
+                  self.no_improvement_count = self.no_improvement_count +1
+                else: 
+                  self.no_improvement_count = 0
+                if self.no_improvement_count >= 5:
+                  if not self.quiet:
+                    print('stopping search: No improvement after 5 iterations.')
+                  self.end = True
             if fx < self.fg:
                 self.last_g = np.array(self.g)
                 self.last_fg = self.fg  
@@ -107,7 +121,7 @@ class async_g():
                         print('New best for swarm at iteration {:}: {:} {:}'.format(int(self.count/self.processes), self.g, self.fg))
                     else:
                         print('New best for swarm at initial random positions: {:} {:}'.format(self.g, self.fg))
-                if self.count > 2 and (self.last_fg-self.fg) < self.minfunc:
+                if self.count > 2 and self.last_fg-self.fg<self.minfunc:
                     if not self.quiet:
                         print('Stopping search: Swarm best objective change less than {:}'.format(self.minfunc))
                     self.end = True
@@ -115,21 +129,6 @@ class async_g():
                     if not self.quiet:
                         print('Stopping search: Swarm best position change less than {:}'.format(self.minstep))
                     self.end = True
-            #note that debug=True overrides quiet=True.
-            #add new termination condition like 'x number of iterations without improvement'.
-            if not (self.count % self.processes):
-                if self.debug:
-                    print('Best after iteration {:}: {:} {:}'.format(int(self.count/self.processes), self.g, self.fg))
-                if self.last_iter_fg == self.fg:
-                    self.no_improvement_count = self.no_improvement_count +1
-                else: 
-                    self.no_improvement_count = 0
-                    self.last_iter_fg = self.fg
-                if self.no_improvement_count >= 5:
-                    if not self.quiet:
-                        print('stopping search: No improvement after 5 iterations.')
-                    self.end = True
-
             if self.maxcount <= self.count:
                 if not self.quiet:
                     print('Stopping search: maximum iterations reached --> {:}'.format(self.maxiter))
