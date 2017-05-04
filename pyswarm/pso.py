@@ -113,6 +113,7 @@ class async_g():
                   self.no_improvement_count = self.no_improvement_count +1
                 else: 
                   self.no_improvement_count = 0
+                  self.last_fg = self.fg
                 if self.no_improvement_count >= 5:
                   if not self.quiet:
                     print('stopping search: No improvement after 5 iterations.')
