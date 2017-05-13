@@ -70,16 +70,20 @@ class async_g():
     #stores various global information, including the global best.
     #thread safe.
     #maybe I should add a way to pre-load a list?
-    def __init__(self,processes,maxiter,lb,ub,mp_pool,minstep,minfunc,debug,quiet):
+    def __init__(self,processes,maxiter,lb,ub,mp_pool,minstep,minfunc,debug,quiet,initial_best_guess=None):
         from multiprocessing.dummy import Lock
         self.xlog = {}
         self.fxlog = {}
         for i in range(processes):
             self.xlog[str(i)] = []
             self.fxlog[str(i)] = []
-        self.g = np.random.rand(len(lb))
-        self.g = lb + self.g*(ub - lb) #position of global best - random at start.
-        self.fg = np.inf #cost of global best
+        if initial_best_guess == None:    
+            self.g = np.random.rand(len(lb))
+            self.g = lb + self.g*(ub - lb) #position of global best - random at start.
+            self.fg = np.inf #cost of global best
+        else:
+            self.g = np.array(initial_best_guess[0])
+            self.fg = initial_best_guess[1]
         self.last_g = np.array(self.g)
         self.last_fg = self.fg
         self.lock = Lock()
@@ -108,15 +112,15 @@ class async_g():
             #todo: add new termination condition like 'x number of iterations without improvement'.
             if not (self.count % self.processes):
                 if self.debug:
-                  print('Best after iteration {:}: {:} {:}'.format(int(self.count/self.processes ), self.g, self.fg))
+                  print('--- Best after iteration {:}: {:} {:} ---'.format(int(self.count/self.processes ), self.g, self.fg))
                 if self.last_fg == self.fg:
                   self.no_improvement_count = self.no_improvement_count +1
                 else: 
                   self.no_improvement_count = 0
                   self.last_fg = self.fg
-                if self.no_improvement_count >= 5:
+                if self.no_improvement_count >= 10:
                   if not self.quiet:
-                    print('stopping search: No improvement after 5 iterations.')
+                    print('--- stopping search: No improvement after 10 iterations. ---')
                   self.end = True
             if fx < self.fg:
                 self.last_g = np.array(self.g)
@@ -125,20 +129,20 @@ class async_g():
                 self.fg = fx
                 if self.debug:
                     if int(self.count/self.processes) > 0:
-                        print('New best for swarm at iteration {:}: {:} {:}'.format(int(self.count/self.processes), self.g, self.fg))
+                        print('---New best for swarm at iteration {:}: {:} {:} ---'.format(int(self.count/self.processes), self.g, self.fg))
                     else:
-                        print('New best for swarm at initial random positions: {:} {:}'.format(self.g, self.fg))
+                        print('---New best for swarm at initial random positions: {:} {:} ---'.format(self.g, self.fg))
                 if self.count > 2 and self.last_fg-self.fg<self.minfunc:
                     if not self.quiet:
-                        print('Stopping search: Swarm best objective change less than {:}'.format(self.minfunc))
+                        print('---Stopping search: Swarm best objective change less than {:} ---'.format(self.minfunc))
                     self.end = True
                 elif self.count > 2 and np.linalg.norm(self.g - self.last_g) <= self.minstep:
                     if not self.quiet:
-                        print('Stopping search: Swarm best position change less than {:}'.format(self.minstep))
+                        print('---Stopping search: Swarm best position change less than {:} ---'.format(self.minstep))
                     self.end = True
             if self.maxcount <= self.count:
                 if not self.quiet:
-                    print('Stopping search: maximum iterations reached --> {:}'.format(self.maxiter))
+                    print('---Stopping search: maximum iterations reached --> {:} ---'.format(self.maxiter))
                 self.end = True
 
 
@@ -160,7 +164,7 @@ def _cons_f_ieqcons_wrapper(f_ieqcons, args, kwargs, x):
 def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={}, 
         swarmsize=100, omega=0.5, phip=0.5, phig=0.5, maxiter=100, 
         minstep=1e-8, minfunc=1e-8, debug=False, processes=1,
-        particle_output=False, async=True, quiet=False):
+        particle_output=False, async=True, quiet=False, initial_best_guess=None):
     """
     Perform an asynchronous particle swarm optimization (PSO)
     Set async=False to mimic behavior of pyswarm 0.7 (synchronous)
@@ -289,16 +293,19 @@ def pso(func, lb, ub, ieqcons=[], f_ieqcons=None, args=(), kwargs={},
         # best swarm position
         #debug overrides quiet
         if debug:
-          quiet=False
-        ag = async_g(processes,maxiter,lb,ub,mp_pool,minstep,minfunc,debug,quiet)
+            quiet=False
+        ag = async_g(processes,maxiter,lb,ub,mp_pool,minstep,minfunc,debug,quiet, initial_best_guess=initial_best_guess)
         args = []
         for i in range(processes):
             args.append((i, obj, lb, ub, is_feasible, omega, phip, phig, ag, minstep))        
         mp_pool.map(async_particle, args)
+        #need to add more particles in case some crashes
         mp_pool.close()
         mp_pool.join()
         if not is_feasible(ag.g) and not quiet:
           print("However, the optimization couldn't find a feasible design. Sorry")
+        if not ag.end:
+          print "---this is a bug.---"
         if particle_output:
             #the format is a bit different; xlog and fxlog are histories of all particles.  also they're dictionaries.
             return ag.g, ag.fg, ag.xlog, ag.fxlog
