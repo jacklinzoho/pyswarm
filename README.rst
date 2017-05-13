@@ -20,7 +20,7 @@ Example
 	
 	xopt, fopt = pso(sim, lb, ub, f_ieqcons=constraints, swarmsize=10, omega=0.5, phip=0.5, phig=5, maxiter=100, minstep=0.0001, minfunc=0.000001, processes=10, debug=True, async=True, particle_output=False, initial_best_guess=initial_best_guess, quiet=False)
 	
-	---or---
+	# alternatively:
 	
 	xopt, fopt, xlog, fxlog = pso(sim, lb, ub, f_ieqcons=constraints, swarmsize=10, omega=0.5, phip=0.5, phig=5, maxiter=100, minstep=0.0001, minfunc=0.000001, processes=10, debug=True, async=True, particle_output=True, initial_best_guess=initial_best_guess, quiet=False)
 
