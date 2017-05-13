@@ -24,11 +24,12 @@ Example
 	
 	xopt, fopt, xlog, fxlog = pso(sim, lb, ub, f_ieqcons=constraints, swarmsize=10, omega=0.5, phip=0.5, phig=5, maxiter=100, minstep=0.0001, minfunc=0.000001, processes=10, debug=True, async=True, particle_output=True, initial_best_guess=initial_best_guess, quiet=False)
 
-Inputs::
+Inputs:
+=======
 	
-	**sim the function to be optimized.  It takes as input a list x.  Returns a real number representing the cost.
-	**lb,ub are the upper/lower bounds.  len(lb) == len(ub) == len(x)
-	**f_ieqcons takes as input a list x.  Returns 1 for acceptable values of x and 0 for unacceptable values of x.
+	**sim** the function to be optimized.  It takes as input a list x.  Returns a real number representing the cost.
+	**lb,ub** are the upper/lower bounds.  len(lb) == len(ub) == len(x)
+	**f_ieqcons** takes as input a list x.  Returns 1 for acceptable values of x and 0 for unacceptable values of x.
 	**swarmsize** is the number of particles.
 	**omega, phip, phig**: PSO parameters.  Need to be tuned to the problem.
 	**maxiter** number of iterations to run.  For the asynchronous version, it is approximately total runs / number of particles.
@@ -41,7 +42,9 @@ Inputs::
 	**initial_best_guess** a list containing an initial position and cost.  Speeds convergence if you have it, but is optional.  e.g. [[10, 2],0.2]
 	**quiet** disables all screen output.
 	
-Outputs::
+Outputs:
+========
+
 	**xopt** position of optimized result.
 	**fopt** cost of optimized result.
 	**xlog** a dictionary containing evaluated positions for each particle.
