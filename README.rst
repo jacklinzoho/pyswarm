@@ -9,7 +9,7 @@ The key difference is that particles do not wait until the end of an iteration t
 Current Status
 ==============
 
-Works far as I can tell, but need further testing.  Use at own risk.
+Works far as I can tell.  Use at own risk.
 
 Example
 =======
@@ -30,13 +30,13 @@ Input
 sim 
   the function to be optimized.  It takes as input a list x.  Returns a real number representing the cost.
 lb,ub 
-  are the upper/lower bounds.  len(lb) == len(ub) == len(x)
+  the upper/lower bounds of x.  len(lb) == len(ub) == len(x)
 f_ieqcons 
   takes as input a list x.  Returns 1 for acceptable values of x and 0 for unacceptable values of x.
 swarmsize 
-  is the number of particles.
+  the number of particles to simultaneously run.
 omega, phip, phig
-  PSO parameters.  Need to be tuned to the problem.
+  PSO parameters.  Omega is inertia, phip is the gravity of particle best, phig is gravity of global best.  Need to be tuned to the problem for good performance.
 maxiter 
   number of iterations to run.  For the asynchronous version, it is approximately total runs / number of particles.
 minstep 
